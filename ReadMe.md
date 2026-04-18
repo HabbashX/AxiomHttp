@@ -19,6 +19,9 @@ It allows you to define HTTP APIs using interfaces while the library handles req
 * ⚡ Async Requests Handling
 ---
 
+# 🏗 Requirements
+* Java 21
+---
 # 🏗 Architecture Overview
 
 ```
