@@ -1,0 +1,13 @@
+com.habbashx.annotation
+com.habbashx.cache.method
+com.habbashx.cache.method.meta
+com.habbashx.exception
+com.habbashx.executors
+com.habbashx.Interceptor
+com.habbashx.json.serializer
+com.habbashx.proxy
+com.habbashx.proxy.engine
+com.habbashx.proxy.factory
+com.habbashx.request
+com.habbashx.request.registry
+com.habbashx.request.strategy

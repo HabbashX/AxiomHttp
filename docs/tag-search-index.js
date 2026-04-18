@@ -1,0 +1,1 @@
+tagSearchIndex = [{"l":"Built-in strategies","h":"class com.habbashx.request.RequestMethod","k":"16","u":"com/habbashx/request/RequestMethod.html#built-in-strategies-heading"},{"l":"Serialized Form","h":"","k":"18","u":"serialized-form.html"}];updateSearchResults();
