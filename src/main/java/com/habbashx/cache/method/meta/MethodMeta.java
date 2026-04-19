@@ -1,9 +1,6 @@
 package com.habbashx.cache.method.meta;
 
-import com.habbashx.annotation.Headers;
-import com.habbashx.annotation.Path;
-import com.habbashx.annotation.Query;
-import com.habbashx.annotation.Request;
+import com.habbashx.annotation.*;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -34,6 +31,9 @@ public class MethodMeta {
     /** The method's declared parameters in order. */
     private final Parameter[] parameters;
 
+    /** The {@code @SaveResponse} annotation, or {@code null} if the method does not save responses. */
+    private final SaveResponse saveResponseAnnotation;
+
     /**
      * Per-parameter {@code @Path} annotations, indexed by parameter position.
      * {@code null} at index {@code i} means parameter {@code i} has no {@code @Path}.
@@ -57,6 +57,7 @@ public class MethodMeta {
         this.requestAnnotation = method.getAnnotation(Request.class);
         this.headersAnnotation = method.getAnnotation(Headers.class);
         this.parameters = method.getParameters();
+        this.saveResponseAnnotation = method.getAnnotation(SaveResponse.class);
 
         this.pathAnnotations  = new Path[parameters.length];
         this.queryAnnotations = new Query[parameters.length];
@@ -90,6 +91,13 @@ public class MethodMeta {
      * @return the method's declared parameters in declaration order
      */
     public Parameter[] getParameters() { return parameters; }
+
+    /**
+     * @return the {@code @SaveResponse} annotation, or {@code null} if the method has none
+     */
+    public SaveResponse getSaveResponseAnnotation() {
+        return saveResponseAnnotation;
+    }
 
     /**
      * Returns the {@code @Path} annotation for the parameter at the given index.
