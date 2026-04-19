@@ -1,264 +1,422 @@
-# ⚡ AxiomHttp (Custom Java HTTP Client Library)
+# AxiomHttp
 
-A lightweight, annotation-driven Java HTTP client library built with **ByteBuddy runtime proxies**, an **interceptor pipeline**, and a **method metadata caching system**.
+A lightweight, annotation-driven Java HTTP client library built on ByteBuddy runtime proxies, an interceptor pipeline, and a method metadata caching system.
 
-It allows you to define HTTP APIs using interfaces while the library handles request building, execution, serialization, and response mapping internally.
+Define your HTTP API as a plain Java class. Annotate the methods. AxiomHttp handles everything else — request building, URL resolution, header injection, execution, and JSON deserialization.
 
 ---
 
-# 🚀 Key Features
+## Requirements
 
-* 🧠 Annotation-based HTTP API definitions (`@Request`, `@Path`, `@Query`, `@Headers`, `@Body`)
-* ⚡ Runtime proxy generation using ByteBuddy
-* 🔁 Interceptor pipeline (before / after execution hooks)
-* 🧩 Method metadata caching (reflection optimized)
-* 🌐 Built-in HTTP execution layer (GET / POST / PUT / DELETE)
-* 📦 Request context abstraction (clean separation of concerns)
-* 🔌 Pluggable JSON serialization (Jackson-ready)
-* 🧠 Clean separation between parsing, execution, and transport layers
-* ⚡ Async Requests Handling
+- Java 21+
+- Maven
+
 ---
 
-# 🏗 Requirements
-* Java 21
----
-# 🏗 Architecture Overview
+## Dependencies
 
-```
-Interface Method Call
-        ↓
-ByteBuddy Proxy (RequestProxyEngine)
-        ↓
-MethodContext creation
-        ↓
-MethodCache → MethodMeta lookup
-        ↓
-InterceptorChain (before)
-        ↓
-HttpExecutor
-        ↓
-RequestMethod (GET/POST/PUT/DELETE)
-        ↓
-InterceptorChain (after)
-        ↓
-Final Response
+| Library | Version | Purpose |
+|---|---|---|
+| `byte-buddy` | 1.14.18 | Runtime proxy generation |
+| `jackson-databind` | 2.21.2 | JSON serialization / deserialization |
+| `jetbrains-annotations` | 26.0.2 | `@NotNull` / nullability hints |
+
+---
+
+## Installation
+
+Add to your `pom.xml`:
+
+```xml
+<dependency>
+    <groupId>com.habbashx</groupId>
+    <artifactId>AxiomHttp</artifactId>
+    <version>1.0.0</version>
+</dependency>
 ```
 
 ---
 
-# 📦 Core Design Principles
-
-## 1. Separation of Concerns
-
-* Reflection only happens once (MethodMeta)
-* Execution layer does NOT know annotations
-* Interceptors modify context only
-
-## 2. Stateless Execution Layer
-
-* Request methods are reusable
-* No runtime mutation of execution strategies
-
-## 3. Cached Reflection
-
-* Method metadata is cached via MethodCache
-* Eliminates repeated annotation parsing
-
----
-
-# 📌 Annotations
-
-## @Request
-
-Defines endpoint configuration:
+## Quick Start
 
 ```java
-@Request(uri = "https://api.example.com/users/{id}", method = "GET")
-```
+public interface ApiService {
 
----
+    @Request(uri = "https://jsonplaceholder.typicode.com/posts/1", method = "GET")
+    String getPost();
+}
 
-## @Path
-
-Replaces URI variables:
-
-```java
-@Path("id") String id
-```
-
----
-
-## @Query
-
-Adds query parameters:
-
-```java
-@Query("name") String name
-```
-
----
-
-## @Headers
-
-Static headers per method:
-
-```java
-@Headers({
-    "Authorization: Bearer token",
-    "Accept: application/json"
-})
-```
-
----
-
-# ⚙️ Usage Examples
-
-## 1. Simple GET Request
-
-```java
-public interface UserApi {
-
-    @Request(uri = "https://api.example.com/users/{id}", method = "GET")
-    String getUser(@Path("id") String id);
+public class Main {
+    public static void main(String[] args) {
+        ApiService service = RequestFactory.create(ApiService.class);
+        String response = service.getPost();
+        System.out.println(response);
+    }
 }
 ```
 
-### Usage
+That's it. No configuration, no boilerplate.
+
+---
+
+## Annotations
+
+### `@Request`
+
+Marks a method as an HTTP endpoint. Required on every method that should make a network call.
 
 ```java
-UserApi api = RequestFactory.create(UserApi.class);
-String user = api.getUser("123");
+@Request(uri = "https://api.example.com/users/1", method = "GET")
+String getUser();
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `uri` | `String` | Yes | Full URL or URL template with `{placeholder}` segments |
+| `method` | `String` | Yes | HTTP verb — `GET`, `POST`, `PUT`, `DELETE` (case-insensitive) |
+| `body` | `String` | No | Static request body string, defaults to empty |
+
+---
+
+### `@Path`
+
+Binds a method parameter to a `{placeholder}` in the URI template.
+
+```java
+@Request(uri = "https://api.example.com/users/{id}/posts/{postId}", method = "GET")
+String getUserPost(@Path("id") long userId, @Path("postId") long postId);
+```
+
+At runtime `{id}` and `{postId}` are replaced with the argument values:
+```
+https://api.example.com/users/42/posts/7
 ```
 
 ---
 
-## 2. Query Parameters
+### `@Query`
+
+Binds a method parameter to a URL query string key.
 
 ```java
 @Request(uri = "https://api.example.com/search", method = "GET")
-String search(@Query("q") String query, @Query("page") int page);
+String search(@Query("q") String term, @Query("page") int page);
+```
+
+Multiple `@Query` parameters are joined in declaration order:
+```
+https://api.example.com/search?q=java&page=2
 ```
 
 ---
 
-## 3. POST Request with Body
+### `@Headers`
 
-```java
-@Request(uri = "https://api.example.com/users", method = "POST")
-String createUser(@Body User user);
-```
-
----
-
-## 4. Headers Example
+Declares static HTTP headers sent with the request.
+Values are alternating name/value pairs passed directly to `HttpRequest.Builder#headers()`.
 
 ```java
 @Request(uri = "https://api.example.com/private", method = "GET")
-@Headers({"Authorization","token"})
+@Headers({"Authorization", "Bearer my-token", "Accept", "application/json"})
 String getPrivateData();
 ```
 
 ---
 
-## 5. Mixed Parameters
+### `@SaveResponse`
+
+Automatically saves the response to a file after the request completes.
+Only methods carrying this annotation are affected — all other methods are untouched.
 
 ```java
-@Request(uri = "https://api.example.com/users/{id}/posts", method = "GET")
-List<Post> getPosts(
-    @Path("id") String userId,
-    @Query("limit") int limit
-);
+// Custom file name — saves to responses/users.json
+@SaveResponse(path = "responses", format = SaveFormat.JSON, fileName = "users")
+@Request(uri = "https://api.example.com/users/{id}", method = "GET")
+String getUser(@Path("id") long id);
+
+// Auto-generated file name — saves to responses/GET_users_42_20260418_153042.txt
+@SaveResponse(path = "responses", format = SaveFormat.TXT)
+@Request(uri = "https://api.example.com/users/{id}", method = "GET")
+String getUser(@Path("id") long id);
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `path` | `String` | Yes | Output directory, created automatically if missing |
+| `format` | `SaveFormat` | Yes | `SaveFormat.JSON` or `SaveFormat.TXT` |
+| `fileName` | `String` | No | Custom file name without extension. Auto-generated if empty |
+
+**File name strategies:**
+
+| `fileName` value | Result |
+|---|---|
+| `"users"` | `responses/users.json` |
+| `""` (default) | `responses/GET_users_42_20260418_153042.json` |
+
+**JSON output:**
+```json
+{
+  "timestamp": "2026-04-18T15:30:42",
+  "method": "GET",
+  "url": "https://api.example.com/users/42",
+  "response": { "id": 42, "name": "John" }
+}
+```
+
+**TXT output:**
+```
+Timestamp : 2026-04-18T15:30:42
+Method    : GET
+URL       : https://api.example.com/users/42
+Response  :
+{"id":42,"name":"John"}
 ```
 
 ---
 
-# 🔁 Interceptor System
+## Usage Examples
 
-## HeaderInterceptor
-
-Injects headers from annotations:
+### GET with path variable
 
 ```java
-public class HeaderInterceptor extends Interceptor {
-    @Override
-    public MethodContext before(MethodContext ctx) {
-        return ctx;
-    }
+public interface UserApi {
 
-    @Override
-    public Object after(Object response, MethodContext ctx) {
-        return response;
-    }
+    @Request(uri = "https://api.example.com/users/{id}", method = "GET")
+    String getUser(@Path("id") long id);
+}
+
+UserApi api = RequestFactory.create(UserApi.class);
+String user = api.getUser(42);
+```
+
+---
+
+### GET with query parameters
+
+```java
+public interface SearchApi {
+
+    @Request(uri = "https://api.example.com/search", method = "GET")
+    String search(@Query("q") String term, @Query("page") int page);
+}
+
+SearchApi api = RequestFactory.create(SearchApi.class);
+String results = api.search("java", 1);
+// → https://api.example.com/search?q=java&page=1
+```
+
+---
+
+### POST with static body
+
+```java
+public interface PostApi {
+
+    @Request(
+        uri    = "https://api.example.com/posts",
+        method = "POST",
+        body   = "{\"title\":\"Hello\",\"body\":\"World\"}"
+    )
+    String createPost();
 }
 ```
 
 ---
 
-## PathQueryInterceptor
-
-Handles:
-
-* Path replacement
-* Query string building
-
----
-
-## Custom Interceptor Example
+### Headers
 
 ```java
-public class LoggingInterceptor extends Interceptor {
+public interface SecureApi {
 
-    @Override
-    public MethodContext before(MethodContext ctx) {
-        System.out.println("→ Request: " + ctx.url);
-        return ctx;
-    }
-
-    @Override
-    public Object after(Object response, MethodContext ctx) {
-        System.out.println("← Response received");
-        return response;
-    }
+    @Request(uri = "https://api.example.com/dashboard", method = "GET")
+    @Headers({"Authorization", "Bearer token123", "Accept", "application/json"})
+    String getDashboard();
 }
 ```
 
 ---
 
-# 🧠 Method Caching
+### Async request
 
-Methods are cached to avoid repeated reflection:
+Declare `CompletableFuture<T>` as the return type — AxiomHttp detects it automatically
+and dispatches the request asynchronously without blocking.
 
 ```java
-MethodMeta meta = methodCache.get(method);
+public interface AsyncApi {
+
+    @Request(uri = "https://api.example.com/users/{id}", method = "GET")
+    CompletableFuture<String> getUserAsync(@Path("id") long id);
+}
+
+AsyncApi api = RequestFactory.create(AsyncApi.class);
+api.getUserAsync(42).thenAccept(System.out::println);
 ```
 
-Contains:
+---
 
-* HTTP method
-* URI template
-* parameter structure
-* annotations
+### Save response to file
+
+```java
+public interface ReportApi {
+
+    @SaveResponse(path = "reports", format = SaveFormat.JSON, fileName = "user_42")
+    @Request(uri = "https://api.example.com/users/{id}", method = "GET")
+    String getUser(@Path("id") long id);
+}
+
+ReportApi api = RequestFactory.create(ReportApi.class);
+String user = api.getUser(42);
+// response returned normally AND saved to reports/user_42.json
+```
 
 ---
 
-# 🌐 Execution Flow
+### Mixed parameters
 
-1. Proxy intercepts method call
-2. MethodContext is created
-3. MethodMeta is loaded from cache
-4. Interceptors modify request
-5. HttpExecutor executes request
-6. Response is returned
+```java
+public interface PostApi {
 
----
+    @Request(uri = "https://api.example.com/users/{id}/posts", method = "GET")
+    String getUserPosts(@Path("id") String userId, @Query("limit") int limit);
+}
 
-
-# 📜 License
-
-MIT License
+// Produces: https://api.example.com/users/99/posts?limit=10
+api.getUserPosts("99", 10);
+```
 
 ---
 
-# ⚡ Summary
+## Custom Configuration
 
-AxiomHttp is a reflection-optimized, interceptor-driven HTTP client framework designed to make Java API communication declarative, fast, and extensible.
+Use `RequestFactory.builder()` when you need to customize the HTTP client, JSON serializer,
+executor, or add cross-cutting interceptors.
+
+```java
+ApiService service = RequestFactory.builder()
+        .client(
+            HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .build()
+        )
+        .serializer(new GsonSerializer())
+        .interceptors(List.of(
+            new LoggingInterceptor(),
+            new AuthInterceptor("my-token")
+        ))
+        .buildRequest(ApiService.class);
+```
+
+All builder fields are optional — any field left unset falls back to its default.
+
+| Builder method | Default | Description |
+|---|---|---|
+| `.client(HttpClient)` | `HttpClient.newHttpClient()` | Custom HTTP client — timeouts, SSL, proxy |
+| `.serializer(JsonSerializer)` | `JacksonSerializer` | Swap Jackson for any other JSON library |
+| `.executor(Executor)` | `HttpExecutor` | Custom execution layer for testing or alternate transports |
+| `.interceptors(List)` | empty list | User-supplied interceptors, run after built-in ones |
+
+---
+
+## Interceptor System
+
+Every request passes through an ordered interceptor pipeline. Each interceptor has two hooks:
+
+```java
+public interface Interceptor {
+    MethodContext before(MethodContext ctx);           // runs before the HTTP call
+    Object after(Object response, MethodContext ctx); // runs after deserialization
+}
+```
+
+**Built-in interceptors** (always active, registered automatically):
+
+| Interceptor | Trigger | What it does |
+|---|---|---|
+| `PathQueryInterceptor` | always | Resolves `{path}` variables and appends `?query=params` |
+| `HeaderInterceptor` | `@Headers` present | Injects declared headers into the request |
+| `ResponseSaverInterceptor` | `@SaveResponse` present | Saves the response to a file, no-op otherwise |
+
+**Custom interceptors** run after the built-ins. Implement `Interceptor` and register via the builder:
+
+```java
+public class LoggingInterceptor implements Interceptor {
+
+    @Override
+    public MethodContext before(MethodContext ctx) {
+        System.out.println("→ " + ctx.getMethod() + " " + ctx.getUrl());
+        return ctx;
+    }
+
+    @Override
+    public Object after(Object response, MethodContext ctx) {
+        System.out.println("← response received");
+        return response;
+    }
+}
+```
+
+```java
+ApiService service = RequestFactory.builder()
+        .interceptors(List.of(new LoggingInterceptor()))
+        .buildRequest(ApiService.class);
+```
+
+---
+
+## Architecture
+
+```
+Method call on proxy
+        ↓
+RequestProxyEngine.intercept()
+        ↓
+MethodCache → MethodMeta  (annotations parsed once, cached forever)
+        ↓
+InterceptorHierarchy.applyBefore()
+  → PathQueryInterceptor      resolves {path} variables and ?query=params
+  → HeaderInterceptor         injects @Headers values
+  → [user interceptors]       custom before-logic
+        ↓
+HttpExecutor.execute()
+  → RequestRegistry           selects build strategy (GET/POST/PUT/DELETE)
+  → RequestMethod             fires JDK HttpClient request
+  → JacksonSerializer         deserializes response body into return type
+        ↓
+InterceptorHierarchy.applyAfter()
+  → ResponseSaverInterceptor  saves file if @SaveResponse present, skips otherwise
+  → [user interceptors]       custom after-logic
+        ↓
+Return deserialized response to caller
+```
+
+---
+
+## Design Principles
+
+**Reflection runs once.** Every method's annotations are parsed on the first call and stored
+in `MethodCache<MethodMeta>`. All subsequent calls read from the cache — zero reflection
+overhead at steady state.
+
+**Execution layer is annotation-free.** `HttpExecutor`, `RequestRegistry`, and `RequestMethod`
+know nothing about annotations. They only see a fully-resolved `MethodContext`. Annotations
+are a concern of the interceptors, not the executor.
+
+**Built-in interceptors are zero-cost when inactive.** `ResponseSaverInterceptor` checks for
+`@SaveResponse` and returns immediately if absent. No file I/O, no string building, no overhead
+on unannotated methods. Same principle applies to `HeaderInterceptor` with no `@Headers`.
+
+**Proxy classes are cached.** ByteBuddy subclass generation is expensive. Generated proxy
+classes are stored in a `ConcurrentHashMap` and reused across all calls for the same API class.
+
+**Disk failures never break requests.** `ResponseSaverInterceptor` catches `IOException`,
+prints to stderr, and returns the response unchanged. A full disk never propagates an
+exception to your application.
+
+---
+
+## VERSION
+1.0.1
+
+## License
+
+MIT License — see [LICENSE](LICENSE) for details.
