@@ -80,4 +80,15 @@ public class ApiResponse<T> {
     public T getBody() {
         return body;
     }
+
+    @Override
+    public String toString() {
+        return """
+                {
+                 "statusCode": %s
+                 "headers": %s
+                 "body": %s
+                }
+                """.formatted(statusCode,headers,body);
+    }
 }
