@@ -6,6 +6,14 @@ Define your HTTP API as a plain Java class. Annotate the methods. AxiomHttp hand
 
 ---
 
+## New Features
+- NoCookies Annotation , with NoCookies annotation you cannot send a Cookies to the server
+- CleanResponse return clean response from the endpoint , it only supports String 
+- ApiService class that return all the endpoint properties and headers 
+- ConnectionPoolConfig makes you to configure connection pool with different configuration depends on what you want
+- RequestFactory provide a builtin Connection config with different properties
+---
+
 ## Requirements
 
 - Java 21+
@@ -415,7 +423,7 @@ exception to your application.
 ---
 
 ## VERSION
-1.0.1
+1.0.2
 
 ## License
 
