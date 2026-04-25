@@ -2,6 +2,7 @@ package com.habbashx.axiomhttp.method.meta;
 
 import com.habbashx.axiomhttp.annotation.*;
 import com.habbashx.axiomhttp.annotation.*;
+import com.habbashx.axiomhttp.validation.UrlValidator;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -49,6 +50,10 @@ public class MethodMeta {
 
     private final NoCookies noCookiesAnnotation;
 
+    private final BaseUrl baseUrl;
+
+    private final ExpectedStatus expectedStatus;
+
     /**
      * Parses and caches all annotation metadata from the given method.
      *
@@ -62,12 +67,19 @@ public class MethodMeta {
         this.parameters = method.getParameters();
         this.saveResponseAnnotation = method.getAnnotation(SaveResponse.class);
         this.noCookiesAnnotation = method.getAnnotation(NoCookies.class);
-
+        this.baseUrl = method.getDeclaringClass().getAnnotation(BaseUrl.class);
+        this.expectedStatus = method.getAnnotation(ExpectedStatus.class);
         this.pathAnnotations  = new Path[parameters.length];
         this.queryAnnotations = new Query[parameters.length];
         for (int i = 0; i < parameters.length; i++) {
             this.pathAnnotations[i]  = parameters[i].getAnnotation(Path.class);
             this.queryAnnotations[i] = parameters[i].getAnnotation(Query.class);
+        }
+        if (this.baseUrl != null) {
+            UrlValidator.validateBaseUrl(this.baseUrl.value());
+            UrlValidator.validateRelativePath(this.requestAnnotation.uri());
+        } else {
+            UrlValidator.validateFullUrl(this.requestAnnotation.uri());
         }
     }
 
@@ -121,5 +133,13 @@ public class MethodMeta {
 
     public NoCookies getNoCookiesAnnotation() {
         return noCookiesAnnotation;
+    }
+
+    public BaseUrl getBaseUrl() {
+        return baseUrl;
+    }
+
+    public ExpectedStatus getExpectedStatus() {
+        return expectedStatus;
     }
 }
