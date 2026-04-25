@@ -71,14 +71,14 @@ public class RequestProxyEngine {
      * @return the deserialized response, or a {@code CompletableFuture} wrapping it for async methods
      */
     @RuntimeType
-    public Object intercept(@Origin @NotNull Method method,
-                            @AllArguments Object[] args) throws JsonProcessingException {
-
+    public Object intercept(@Origin @NotNull Method method, @AllArguments Object[] args){
         MethodMeta meta = methodCache.get(method);
         Request req = meta.getRequestAnnotation();
 
+        String uri = meta.getBaseUrl() != null ? meta.getBaseUrl().value() + "/" +req.uri() : req.uri();
+
         MethodContext ctx = MethodContext.builder()
-                .url(req.uri())
+                .url(uri)
                 .method(req.method())
                 .body(req.body())
                 .headers(Map.of())
