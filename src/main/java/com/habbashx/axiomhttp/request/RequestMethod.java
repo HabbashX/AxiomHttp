@@ -4,7 +4,6 @@ import com.habbashx.axiomhttp.parser.HeaderParser;
 import com.habbashx.axiomhttp.request.registry.RequestRegistry;
 import com.habbashx.axiomhttp.request.strategy.BuildStrategy;
 import com.habbashx.axiomhttp.response.ResponseContext;
-import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -106,8 +105,6 @@ public class RequestMethod {
      * @return a {@link CompletableFuture} that completes with the HTTP response body string
      */
     public CompletableFuture<ResponseContext> executeAsync() {
-
-
         return client
                 .sendAsync(strategy.apply(freshBuilder(), body), HttpResponse.BodyHandlers.ofString())
                 .thenApply(this::toResponseContext);

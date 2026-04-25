@@ -134,7 +134,7 @@ public final class RequestFactory {
             RequestRegistry registry = new RequestRegistry(client);
 
             if (executor == null) {
-                executor = new HttpExecutor(registry, serializer);
+                executor = new HttpExecutor(registry, serializer,methodCache);
             }
 
             List<Interceptor> all = new ArrayList<>(List.of(
