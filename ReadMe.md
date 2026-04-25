@@ -6,14 +6,6 @@ Define your HTTP API as a plain Java class. Annotate the methods. AxiomHttp hand
 
 ---
 
-## New Features
-- NoCookies Annotation , with NoCookies annotation you cannot send a Cookies to the server
-- CleanResponse return clean response from the endpoint , it only supports String 
-- ApiService class that return all the endpoint properties and headers 
-- ConnectionPoolConfig makes you to configure connection pool with different configuration depends on what you want
-- RequestFactory provide a builtin Connection config with different properties
----
-
 ## Requirements
 
 - Java 21+
@@ -422,8 +414,314 @@ exception to your application.
 
 ---
 
+# AxiomHttp — New Features
+
+## Table of Contents
+
+- [@BaseUrl](#baseurl)
+- [@ExpectedStatus](#expectedstatus)
+- [URL Validation](#url-validation)
+- [InvalidUrlException](#invalidurlexception)
+- [UnexpectedStatusException](#unexpectedstatusexception)
+
+---
+
+## @BaseUrl
+
+**Package:** `com.habbashx.axiomhttp.annotation`
+
+Declares a base URL to be prepended to all request paths defined on the annotated interface.
+Instead of repeating the full URL on every `@Request` method, you declare it once at the
+interface level and let each method carry only its relative path.
+
+### Usage
+
+```java
+@BaseUrl("https://api.example.com/v1")
+public interface UserService {
+
+    @Request(url = "/users", method = "GET")
+    List<User> getUsers();
+
+    @Request(url = "/users/{id}", method = "GET")
+    User getUserById(@PathParam("id") int id);
+
+    @Request(url = "/users/{id}", method = "DELETE")
+    void deleteUser(@PathParam("id") int id);
+}
+```
+
+### URL Concatenation Rules
+
+| Base URL | Relative Path | Result |
+|---|---|---|
+| `https://api.example.com/v1` | `/users` | `https://api.example.com/v1/users` |
+| `https://api.example.com/v1/` | `/users` | `https://api.example.com/v1/users` |
+| `https://api.example.com/v1` | `/users/42` | `https://api.example.com/v1/users/42` |
+
+Double slashes at the join point are automatically collapsed — both
+`"https://api.example.com/v1/"` and `"https://api.example.com/v1"` produce the same result.
+
+### Without @BaseUrl
+
+If `@BaseUrl` is absent, the `url` value in `@Request` must be a full absolute URL:
+
+```java
+// No @BaseUrl — each method carries the full URL
+public interface UserService {
+
+    @Request(url = "https://api.example.com/v1/users", method = "GET")
+    List<User> getUsers();
+}
+```
+
+### Validation
+
+The base URL is validated at **proxy-creation time**, not per-request. A blank, malformed,
+or non-HTTP/HTTPS value throws `InvalidUrlException` immediately when
+`RequestFactory.create()` or `RequestFactory.builder().build()` is called.
+
+```java
+@BaseUrl("not-a-valid-url")   // throws InvalidUrlException at startup
+public interface UserService { ... }
+```
+
+---
+
+## @ExpectedStatus
+
+**Package:** `com.habbashxaxiomhttp.annotation`
+
+Declares the HTTP status code(s) that a request method considers successful. By default,
+AxiomHttp treats any 2xx response as successful. Use `@ExpectedStatus` to override this
+on a per-method basis.
+
+If the actual response status does not match any declared value, an
+`UnexpectedStatusException` is thrown carrying the status code, URL, and raw response body.
+
+### Usage
+
+**Single expected status:**
+
+```java
+@Request(url = "/users", method = "POST")
+@ExpectedStatus(201)
+User createUser(@Body User user);
+```
+
+**Multiple acceptable statuses:**
+
+```java
+@Request(url = "/users/{id}", method = "DELETE")
+@ExpectedStatus({200, 204})
+void deleteUser(@PathParam("id") int id);
+```
+
+**Accepting redirects:**
+
+```java
+@Request(url = "/resource", method = "GET")
+@ExpectedStatus({200, 301, 302})
+String getResource();
+```
+
+### Default Behaviour
+
+If `@ExpectedStatus` is not present, the default policy applies:
+
+| Status Range | Behaviour |
+|---|---|
+| 200–299 | Success — deserialize and return |
+| 400–499 | Throws `UnexpectedStatusException` |
+| 500–599 | Throws `UnexpectedStatusException` |
+
+---
+
+## URL Validation
+
+**Package:** `com.habbashx.axiomhttp.validation`  
+**Class:** `UrlValidator`
+
+All URL validation in AxiomHttp is handled by `UrlValidator`, a stateless utility class
+that runs pre-compiled regex checks at proxy-creation time. Errors surface at startup
+rather than during live request handling.
+
+### What Is Validated
+
+| Check | When It Runs |
+|---|---|
+| Full absolute URL structure | Proxy creation — when no `@BaseUrl` is present |
+| `@BaseUrl` value structure | Proxy creation — when `@BaseUrl` is present |
+| Relative path structure | Proxy creation — when `@BaseUrl` is present |
+| Port range (1–65535) | Proxy creation |
+| Unresolved `{placeholder}` segments | Per-request — after `@PathParam` substitution |
+
+### Supported URL Features
+
+| Feature | Example |
+|---|---|
+| HTTP / HTTPS schemes | `https://api.example.com` |
+| Optional userinfo | `https://user:pass@host.com` |
+| IPv4 host | `http://192.168.1.1/path` |
+| IPv6 host | `http://[::1]:8080/path` |
+| Subdomain chains | `https://a.b.c.example.com` |
+| Port number | `https://api.example.com:8443` |
+| Path with `{placeholder}` | `/users/{id}/posts/{postId}` |
+| Query string | `/search?q=hello&page=2` |
+| Fragment | `/docs/api#section-3` |
+
+### Unresolved Placeholder Detection
+
+After `@PathParam` arguments are substituted into the URL at request time, `UrlValidator`
+checks that no `{placeholder}` segments remain. This catches cases where a required
+argument was not supplied.
+
+```java
+// method: User getUser(@PathParam("id") int id)
+// if {id} is never substituted — throws InvalidUrlException:
+// "Unresolved placeholder '{id}' in URL: https://api.example.com/v1/users/{id}"
+```
+
+### Using UrlValidator Directly
+
+```java
+// validate a full URL
+UrlValidator.validateFullUrl("https://api.example.com/v1/users");
+
+// validate a @BaseUrl value
+UrlValidator.validateBaseUrl("https://api.example.com/v1");
+
+// validate a relative path
+UrlValidator.validateRelativePath("/users/{id}");
+
+// check for unresolved placeholders after substitution
+UrlValidator.validateNoUnresolvedPlaceholders("https://api.example.com/v1/users/42");
+```
+
+---
+
+## InvalidUrlException
+
+**Package:** `io.github.axiomhttp.validation`  
+**Extends:** `RuntimeException`
+
+Thrown when a URL or relative path fails structural validation. Carries the invalid URL
+string alongside the standard exception message so callers can inspect the exact value
+that caused the failure.
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `message` | `String` | Human-readable description of why the URL is invalid |
+| `invalidUrl` | `String` | The URL or path that failed validation. May be `null` if the value was blank or null itself |
+
+### Common Causes
+
+- A blank or null URL value in `@BaseUrl` or `@Request`
+- A URL that does not start with `http://` or `https://`
+- A port number outside the valid range 1–65535
+- A relative path used where a full absolute URL is required
+- An unresolved `{paramName}` placeholder remaining in the final URL after `@PathParam` substitution
+
+### Catching the Exception
+
+```java
+try {
+    UserService service = RequestFactory.create(UserService.class);
+} catch (InvalidUrlException e) {
+    System.err.println("Bad URL: " + e.getInvalidUrl());
+    System.err.println("Reason:  " + e.getMessage());
+}
+```
+
+### When It Is Thrown
+
+`InvalidUrlException` is thrown at **proxy-creation time** for structural problems, and at
+**request time** for unresolved placeholders. Because proxy creation typically happens at
+application startup, most configuration errors surface before any requests are made.
+
+---
+
+## UnexpectedStatusException
+
+**Package:** `com.habbashx.axiomhttp.exception`  
+**Extends:** `RuntimeException`
+
+Thrown when an HTTP response carries a status code that does not match the expected status
+declared on the request method. Carries the actual status code, the request URL, and the
+raw response body so callers have full context without needing to make a second request.
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `actualStatus` | `int` | The HTTP status code returned by the server |
+| `url` | `String` | The URL that was requested when the failure occurred |
+| `responseBody` | `String` | The raw response body. Never `null`, may be empty |
+
+### Catching the Exception
+
+```java
+try {
+    User user = userService.getUserById(42);
+} catch (UnexpectedStatusException e) {
+    System.err.println("Request to " + e.getUrl() + " failed.");
+    System.err.println("Status : " + e.getActualStatus());
+    System.err.println("Body   : " + e.getResponseBody());
+}
+```
+
+### Relationship to @ExpectedStatus
+
+| Scenario                                     | Behaviour |
+|----------------------------------------------|---|
+| No `@ExpectedStatus`, response is 2xx        | Success |
+| No `@ExpectedStatus`, response is 4xx or 5xx | Throws `UnexpectedStatusException` |
+| `@ExpectedStatus(201)`, response is 201      | Success |
+| `@ExpectedStatus(201)`, response is 200      | Throws `UnexpectedStatusException` |
+| `@ExpectedStatus(200)`, response is 204      | Success |
+| `@ExpectedStatus(200)`, response is 500       | Throws `UnexpectedStatusException` |
+
+---
+
+## Putting It All Together
+
+```java
+@BaseUrl("https://api.example.com/v1")
+public interface UserService {
+
+    // default 2xx validation applies
+    @Request(url = "/users", method = "GET")
+    List<User> getUsers();
+
+    // only 201 is accepted; 200 would throw UnexpectedStatusException
+    @Request(url = "/users", method = "POST")
+    @ExpectedStatus(201)
+    User createUser(@Body User user);
+
+    // either 200 or 204 is accepted
+    @Request(url = "/users/{id}", method = "DELETE")
+    @ExpectedStatus(200)
+    void deleteUser(@PathParam("id") int id);
+}
+
+// proxy creation validates @BaseUrl and all relative paths immediately
+UserService service = RequestFactory.create(UserService.class);
+
+try {
+    service.deleteUser(42);
+} catch (UnexpectedStatusException e) {
+    // status was not 200 or 204
+} catch (InvalidUrlException e) {
+    // URL was malformed — should not reach here at runtime
+    // if it does, it means a placeholder was not resolved
+}
+```
+
+
 ## VERSION
-1.0.2
+1.0.3
 
 ## License
 
