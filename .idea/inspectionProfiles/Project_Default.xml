@@ -7,7 +7,7 @@
     <inspection_tool class="IncorrectHttpHeaderInspection" enabled="true" level="WARNING" enabled_by_default="true">
       <option name="customHeaders">
         <set>
-          <option value="Bearer eyJhbGciOiJFUzI1NiIsImtpZCI6ImFhYWY0OWU3LWU0MDgtNDA5YS1hNjcyLTNhYmMwYWNiMTBlYSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3RlY2t1b3dmdGJtcmd2bWV4Y2x5LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJmMWVmYzIwOC1iZjgxLTQ4MTAtYTI1ZS1iYjJjNWI5NGRlMWIiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzc2MjUwNDMxLCJpYXQiOjE3NzYyNDY4MzEsImVtYWlsIjoiIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnt9LCJ1c2VyX21ldGFkYXRhIjp7fSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJhbm9ueW1vdXMiLCJ0aW1lc3RhbXAiOjE3NzYyNDY4MzF9XSwic2Vzc2lvbl9pZCI6IjYwMWU0NWRmLWJkZWEtNDY5Ni05ZTA0LWE5YmE3YTE3MTc1MiIsImlzX2Fub255bW91cyI6dHJ1ZX0.Ewk6EGx62QB_wEqkM1oS5WtSdZq35u9u59ggzMNs_GsEYQRyn98aT9XSiQZh6co3ieOhOIW7XJg2NKIN6983VQ" />
+          <option value="" />
           <option value="application/json" />
         </set>
       </option>
